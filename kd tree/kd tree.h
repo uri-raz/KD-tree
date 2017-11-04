@@ -2,6 +2,7 @@
 #include <vector>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <iterator>
 #include <iostream>
 #include <algorithm>
@@ -21,6 +22,7 @@
 //  2015-12-24 Cleanups following user feedback
 //  2016-01-15 Add point insertion, point deletion, and tree rebuilding.
 //  2016-10-12 Refactoring & improvements
+//  2017-11-04 Cleanups
 
 // ---------------------------------------------------------------------------------------------
 
@@ -130,7 +132,7 @@ private:
 	static bool isValid(const kd_point &kdPoint)
 	{
 		for (auto i : kdPoint)
-			if (!std::isfinite(i) )
+			if (!std::isfinite(i))
 				return false;
 
 		return true;
@@ -280,7 +282,7 @@ protected:
 
 			if (currDistance > nearDistances[i]) return;
 
-			for (auto elem : nearPoints)
+			for (const kd_point& elem : nearPoints)
 				if (elem == m_pointCoords) return;
 
 			nearPoints[i] = m_pointCoords;
@@ -306,7 +308,7 @@ protected:
 	{
 		std::sort(iterBegin, iterEnd, [num](const kd_point &A, const kd_point &B) { return A[num] < B[num]; });
 
-		size_t numPoints = iterEnd - iterBegin;
+		const auto numPoints = iterEnd - iterBegin;
 
 		float Median = (*(iterBegin + numPoints / 2))[num];
 
@@ -334,7 +336,7 @@ protected:
 	{
 		if (iterEnd - iterBegin == 1)
 		{
-			std::shared_ptr<kd_leaf_node> retNode(new kd_leaf_node(*iterBegin));
+			std::shared_ptr<kd_leaf_node> retNode(std::make_shared<kd_leaf_node>(*iterBegin));
 
 			if (lastLeaf)
 			{
@@ -356,7 +358,7 @@ protected:
 			if (point0[splitAxis] > point1[splitAxis])
 				std::swap(point0, point1);
 
-			std::shared_ptr<kd_leaf_node> Left(new kd_leaf_node(point0)), Right(new kd_leaf_node(point1));
+			std::shared_ptr<kd_leaf_node> Left(std::make_shared<kd_leaf_node>(point0)), Right(std::make_shared<kd_leaf_node>(point1));
 
 			if (lastLeaf)
 			{
@@ -371,8 +373,8 @@ protected:
 
 			lastLeaf = Right;
 
-			std::shared_ptr<kd_internal_node> retNode(new
-				kd_internal_node((point0[splitAxis] + point1[splitAxis]) / 2.0f, splitAxis, kd_box<K>(point0, point1), Left, Right));
+			std::shared_ptr<kd_internal_node> retNode(std::make_shared<kd_internal_node>(
+												(point0[splitAxis] + point1[splitAxis]) / 2.0f, splitAxis,kd_box<K>(point0, point1), Left, Right));
 
 			return retNode;
 		}
@@ -396,7 +398,7 @@ protected:
 			Left  = CreateTree(iterBegin, lastMedianLoc, lastLeaf, Depth + 1);
 			Right = CreateTree(lastMedianLoc, iterEnd,   lastLeaf, Depth + 1);
 
-			std::shared_ptr<kd_internal_node> retNode(new kd_internal_node(Median, splitAxis, boundingBox, Left, Right));
+			std::shared_ptr<kd_internal_node> retNode(std::make_shared<kd_internal_node>(Median, splitAxis, boundingBox, Left, Right));
 
 			return retNode;
 		}
@@ -444,7 +446,36 @@ public:
 	kd_tree(const kd_tree &obj) = delete;
 	kd_tree(std::vector<kd_point> &Points) { insert(Points); }
 
-	bool operator=(const kd_tree<K> rhs) = delete;
+	kd_tree& kd_tree::operator=(kd_tree&& other)
+	{
+		if (this != &other)
+		{
+			// release the current object’s resources
+			m_Root.reset();
+			m_firstLeaf.reset();
+
+			// pilfer other’s resource
+			m_Root = other.m_Root;
+			m_firstLeaf other.m_firstLeaf;
+
+			// reset other
+			otheer.m_Root.reset();
+			other.m_firstLeaf.reset();
+		}
+
+		return *this;
+	}
+
+	bool operator=(const kd_tree<K> rhs)
+	{
+		std::vector<kd_point> &Points;
+
+		for (const kd_tree<3>::kd_point& Point : rhs)
+			Points.push_back(Point);
+
+		insert(Points);
+	}
+
 	bool operator==(const kd_tree<K> rhs) = delete;
 
 	void clear() { m_Root.reset(); }
@@ -569,7 +600,7 @@ public:
 			if (Point[splitAxis] > rootPoint[splitAxis])
 				std::swap(prmPoint, rootPoint);
 
-			std::shared_ptr<kd_leaf_node> Left(new kd_leaf_node(prmPoint)), Right(new kd_leaf_node(rootPoint));
+			std::shared_ptr<kd_leaf_node> Left(std::make_shared<kd_leaf_node>(prmPoint)), Right(std::make_shared<kd_leaf_node>(rootPoint));
 
 			Left->m_Next = Right;
 			Right->m_Prev = Left;
@@ -593,7 +624,7 @@ public:
 				currNode = Point[prevNode->splitAxis()] <= prevNode->splitVal() ? prevNode->m_Left : prevNode->m_Right;
 			}
 
-			bool prvSide = (Point[prevNode->splitAxis()] <= prevNode->splitVal());
+			const bool prvSide = (Point[prevNode->splitAxis()] <= prevNode->splitVal());
 
 			std::shared_ptr<kd_leaf_node> brother =
 								std::static_pointer_cast<kd_leaf_node>(prvSide ? prevNode->m_Left : prevNode->m_Right);
@@ -604,12 +635,10 @@ public:
 
 			unsigned splitAxis = diffIndex(Point, brotherPoint);
 
-			std::shared_ptr<kd_leaf_node> pointNode(new kd_leaf_node(Point));
+			std::shared_ptr<kd_leaf_node> pointNode(std::make_shared<kd_leaf_node>(Point));
 			std::shared_ptr<kd_internal_node> iNode;
 
-			bool pntSide = (Point[splitAxis] <= brotherPoint[splitAxis]);
-
-			if (pntSide)
+			if (Point[splitAxis] <= brotherPoint[splitAxis])
 			{
 				iNode = std::make_shared<kd_internal_node>((Point[splitAxis] + brotherPoint[splitAxis]) / 2.0f, splitAxis,
 														   kd_box<K>(Point, brotherPoint), pointNode, brother);
@@ -643,10 +672,7 @@ public:
 					pNext->m_Prev = pointNode;
 			}
 
-			if (prvSide)
-				prevNode->m_Left = iNode;
-			else
-				prevNode->m_Right = iNode;
+			(prvSide ? prevNode->m_Left : prevNode->m_Right) = iNode;
 		}
 
 		return true;
@@ -726,7 +752,7 @@ public:
 		points.reserve(leafNodes);
 		points.shrink_to_fit();
 
-		for (auto Point : *this)
+		for (const kd_point& Point : *this)
 			points.push_back(Point);
 
 		insert(points);
@@ -746,22 +772,16 @@ public:
 
 	// ----------------------------------------------------------------------
 
-	bool nearestNeighbor(const kd_point &srcPoint, kd_point &nearPoint) const
+	std::optional<kd_point> nearestNeighbor(const kd_point &srcPoint) const
 	{
-		bool retVal = (m_Root != nullptr);
+		if (!m_Root) return std::nullopt;
 
-		if (!m_Root)
-			nearPoint.fill(std::numeric_limits<float>::quiet_NaN());
-		else
-		{
-			nearPoint = ApproxNearestNeighborPoint(srcPoint);
+		kd_point nearPoint = ApproxNearestNeighborPoint(srcPoint);
+		float minDistance = Distance(srcPoint, nearPoint);
+		
+		m_Root->nearestNeighbor(srcPoint, nearPoint, minDistance, kd_box<K>(srcPoint, minDistance));
 
-			float minDistance = Distance(srcPoint, nearPoint);
-
-			m_Root->nearestNeighbor(srcPoint, nearPoint, minDistance, kd_box<K>(srcPoint, minDistance));
-		}
-
-		return retVal;
+		return nearPoint;
 	}
 
 	// --------------------------------------------------------------------------------------------------------

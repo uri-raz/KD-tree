@@ -23,6 +23,7 @@
 //  2016-01-15 Add point insertion, point deletion, and tree rebuilding.
 //  2016-10-12 Refactoring & improvements
 //  2017-11-04 Cleanups
+//  2017-12-14 Cleanups
 
 // ---------------------------------------------------------------------------------------------
 
@@ -43,7 +44,7 @@ class kd_box
 {
 public:
 	using kd_point = std::array<float, K>;
-	kd_point first, second;
+	kd_point first = { 0 }, second = { 0 };
 	
 	kd_box(const kd_point &Point1, const kd_point &Point2)
 	{
@@ -381,9 +382,10 @@ protected:
 		else
 		{
 			kd_box<K> boundingBox(iterBegin, iterEnd);
-			unsigned  splitAxis = diffIndex(boundingBox, Depth%K);
-			float     Median    = NthCoordMedian(iterBegin, iterEnd, splitAxis);
-			size_t    numPoints = iterEnd - iterBegin;
+
+			const unsigned  splitAxis = diffIndex(boundingBox, Depth%K);
+			const float     Median    = NthCoordMedian(iterBegin, iterEnd, splitAxis);
+			const size_t    numPoints = iterEnd - iterBegin;
 
 			std::vector<kd_point>::iterator lastMedianLoc = iterBegin + numPoints / 2;
 
@@ -443,12 +445,12 @@ protected:
 public:
 
 	kd_tree() { }
-	kd_tree(const kd_tree &obj) = delete;
+
 	kd_tree(std::vector<kd_point> &Points) { insert(Points); }
 
 	kd_tree& kd_tree::operator=(kd_tree&& other)
 	{
-		if (this != &other)
+		if (this != other)
 		{
 			// release the current object’s resources
 			m_Root.reset();
@@ -466,25 +468,18 @@ public:
 		return *this;
 	}
 
-	bool operator=(const kd_tree<K> rhs)
-	{
-		std::vector<kd_point> &Points;
-
-		for (const kd_tree<3>::kd_point& Point : rhs)
-			Points.push_back(Point);
-
-		insert(Points);
-	}
-
-	bool operator==(const kd_tree<K> rhs) = delete;
-
 	void clear() { m_Root.reset(); }
 
-	kd_box<K> boundingBox() const
+	kd_tree(const kd_tree &obj) = delete;
+	bool operator=(const kd_tree<K> &rhs) = delete;
+	bool operator==(const kd_tree<K> rhs) = delete;
+
+	std::optional<kd_box<K>> boundingBox() const
 	{
-		return m_Root ? m_Root->boundingBox()
-					  : kd_box<K>(kd_point({ std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}),
-							      kd_point({ std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}));
+		if (m_Root)
+			return m_Root->boundingBox();
+		else
+			return std::nullopt;
 	}
 
 	friend void swap(kd_tree& a, kd_tree& b)
@@ -537,7 +532,7 @@ public:
 
 	const_iterator begin()
 	{
-		return m_Root != nullptr ? m_firstLeaf.lock() : end();
+		return m_Root ? m_firstLeaf.lock() : end();
 	}
 
 	const_iterator end()
@@ -650,7 +645,7 @@ public:
 
 				std::shared_ptr<kd_leaf_node> pPrev = pointNode->m_Prev.lock();
 
-				if (pPrev != nullptr)
+				if (pPrev)
 					pPrev->m_Next = pointNode;
 
 				if (m_firstLeaf.lock() == brother)
@@ -668,7 +663,7 @@ public:
 
 				std::shared_ptr<kd_leaf_node> pNext = pointNode->m_Next.lock();
 
-				if (pNext != nullptr)
+				if (pNext)
 					pNext->m_Prev = pointNode;
 			}
 
@@ -715,7 +710,7 @@ public:
 
 			if (pNode == nullptr)
 				m_firstLeaf = nNode;
-			else if (nNode != nullptr)
+			else if (nNode)
 			{
 				pNode->m_Next = lNode->m_Next;
 				nNode->m_Prev = lNode->m_Prev;
@@ -723,13 +718,9 @@ public:
 
 			// Remove point from tree
 
-			if (p2Node != nullptr)
-			{
-				if (Point[p2Node->splitAxis()] <= p2Node->splitVal())
-					p2Node->m_Left  = Point[p1Node->splitAxis()] <= p1Node->splitVal() ? p1Node->m_Right : p1Node->m_Left;
-				else
-					p2Node->m_Right = Point[p1Node->splitAxis()] <= p1Node->splitVal() ? p1Node->m_Right : p1Node->m_Left;
-			}
+			if (p2Node)
+				( (Point[p2Node->splitAxis()] <= p2Node->splitVal() ) ? p2Node->m_Left  : p2Node->m_Right ) =
+				   Point[p1Node->splitAxis()] <= p1Node->splitVal()   ? p1Node->m_Right : p1Node->m_Left;
 			else
 				m_Root = Point[p1Node->splitAxis()] <= p1Node->splitVal() ?
 							std::static_pointer_cast<kd_internal_node>(m_Root)->m_Right :
@@ -764,7 +755,7 @@ public:
 	{
 		Points.clear();
 
-		if (m_Root != nullptr && regionCrossesRegion(searchBox, m_Root->boundingBox()))
+		if (m_Root && regionCrossesRegion(searchBox, m_Root->boundingBox()))
 			m_Root->pointsInBox(searchBox, Points);
 
 		Points.shrink_to_fit();
@@ -786,62 +777,46 @@ public:
 
 	// --------------------------------------------------------------------------------------------------------
 
-	bool KNearestNeighbors(const kd_point &srcPoint, std::vector<kd_point> &nearPoints, const unsigned k) const
+	std::vector<kd_point> KNearestNeighbors(const kd_point &srcPoint, const unsigned k) const
 	{
-		nearPoints.clear();
-		nearPoints.reserve(k);
+		std::vector<kd_point> nearPoints;
 
-		if (!m_Root) return false;
+		if (!m_Root) nearPoints;
 
 		std::shared_ptr<kd_leaf_node> nNode = ApproxNearestNeighborNode(srcPoint),
-			pNode = nNode->m_Prev.lock();
+									  pNode = nNode->m_Prev.lock();
 
+		nearPoints.reserve(k);
 		nearPoints.push_back(nNode->pointCoords());
-
 		nNode = nNode->m_Next.lock();
 
 		while (nearPoints.size() < k && (nNode || pNode))
 		{
 			if (nNode)
-			{
-				nearPoints.push_back(nNode->pointCoords());
-
+				nearPoints.push_back(nNode->pointCoords()),
 				nNode = nNode->m_Next.lock();
-			}
 
 			if (pNode && nearPoints.size() < k)
-			{
-				nearPoints.push_back(pNode->pointCoords());
-
+				nearPoints.push_back(pNode->pointCoords()),
 				pNode = pNode->m_Prev.lock();
-			}
 		}
 
 		sort(nearPoints.begin(), nearPoints.end(),
 			 [srcPoint](const kd_point &A, const kd_point &B) {return DistanceSq(srcPoint, A) < DistanceSq(srcPoint, B); });
 
-		if (nearPoints.size() < k)
+		if (nearPoints.size() == k)
 		{
-			kd_point infinityPoint;
-			infinityPoint.fill(std::numeric_limits<float>::infinity());
+			std::vector<float> minDistances;
+			minDistances.reserve(k);
+			minDistances.resize(k);
 
-			nearPoints.resize(k, infinityPoint);
+			for (unsigned i = 0; i < k; i++)
+				minDistances[i] = Distance(srcPoint, nearPoints[i]);
+
+			m_Root->KNearestNeighbors(srcPoint, k, nearPoints, minDistances, kd_box<K>(srcPoint, minDistances[k - 1]));
 		}
 
-		std::vector<float> minDistances;
-		minDistances.resize(k);
-
-		for (unsigned i = 0; i < k; i++)
-			minDistances[i] = Distance(srcPoint, nearPoints[i]);
-
-		m_Root->KNearestNeighbors(srcPoint, k, nearPoints, minDistances, kd_box<K>(srcPoint, minDistances[k-1]));
-
-		for (signed i = k - 1; i > 0 && !isValid(nearPoints[i]); i--)
-			nearPoints.erase(nearPoints.begin() + i);
-
-		nearPoints.shrink_to_fit();
-
-		return true;
+		return nearPoints;
 	}
 
 	// ---------------------------------------------------------------------------
@@ -871,8 +846,8 @@ public:
 
 				std::cout << "Point is (";
 
-				for (unsigned i = 0; i < K; i++)
-					std::cout << point[i] << " ";
+				for (const float &val : point)
+					std::cout << val << " ";
 
 				std::cout << ")" << '\n';
 			}
@@ -883,14 +858,14 @@ public:
 
 	unsigned nodeCount(bool withInternalNodes = false) const
 	{
-		return m_Root != nullptr ? m_Root->nodeCount(withInternalNodes) : 0;
+		return m_Root ? m_Root->nodeCount(withInternalNodes) : 0;
 	}
 
 	// -----------------------------------------------------------
 
 	unsigned TreeHeight() const
 	{
-		return this->m_Root != nullptr ? m_Root->TreeHeight() : 0;
+		return this->m_Root ? m_Root->TreeHeight() : 0;
 	}
 
 	// ------------------------------------------

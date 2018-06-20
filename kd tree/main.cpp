@@ -11,7 +11,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	kd_tree<3>::kd_point Point = { 0.5f, 0.5f, 0.5f },
 						 MinCorner = { 0.0f, 0.0f, 0.0f },
 						 MaxCorner = { 2.0f, 2.0f, 2.0f };
-
 	std::vector<kd_tree<3>::kd_point> Points, nearPoints;
 
 	Points.push_back(kd_tree<3>::kd_point({ 0.0f, 0.0f, 0.0f }));
@@ -43,24 +42,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	std::cout << "Points in cloud are:\n";
 
 	for (kd_tree<3>::kd_point Point : Tree)
-		std::cout << Point[0] << " " << Point[1] << " " << Point[2] << '\n';
-
-	std::cout << std::endl;
-
-	auto nearPoint = Tree.nearestNeighbor(Point);
-
-	if (nearPoint)
-		std::cout << "Nereast point to (" << Point[0] << ',' << Point[1] << ',' << Point[2] << ") is ("
-				  << (*nearPoint)[0] << ',' << (*nearPoint)[1] << ',' << (*nearPoint)[2] << ")\n";
-
-	nearPoints = Tree.KNearestNeighbors(Point, 5);
-
-	unsigned i = 0;
-	for (auto p : nearPoints)
 	{
-		i++;
-		std::cout << "Point #" << i << " is (" << p[0] << ',' << p[1] << ',' << p[2] << ")\n";
+		std::cout << Point[0] << " " << Point[1] << " " << Point[2] << '\n';
 	}
+	std::cout << std::endl;
 
 	return 0;
 }

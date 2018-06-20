@@ -80,7 +80,7 @@ public:
 		{
 			first = second = *iterBegin;
 
-			for (std::vector<kd_point>::iterator currPoint = std::next(iterBegin); currPoint != iterEnd; currPoint++)
+			for (auto currPoint = std::next(iterBegin); currPoint != iterEnd; currPoint++)
 			{
 				for (unsigned i = 0; i < K; i++)
 				{
@@ -318,7 +318,7 @@ protected:
 
 		if (Median == (*(iterEnd - 1))[num] && Median != (*iterBegin)[num])
 		{
-			std::vector<kd_point>::iterator medianIter = iterBegin + numPoints / 2;
+			auto medianIter = iterBegin + numPoints / 2;
 
 			while (Median == (*(--medianIter))[num]);
 
@@ -387,7 +387,7 @@ protected:
 			const float     Median    = NthCoordMedian(iterBegin, iterEnd, splitAxis);
 			const size_t    numPoints = iterEnd - iterBegin;
 
-			std::vector<kd_point>::iterator lastMedianLoc = iterBegin + numPoints / 2;
+			auto lastMedianLoc = iterBegin + numPoints / 2;
 
 			if ((*lastMedianLoc)[splitAxis] != (*std::prev(iterEnd))[splitAxis])
 				while ((*(++lastMedianLoc))[splitAxis] == Median);
@@ -447,26 +447,6 @@ public:
 	kd_tree() { }
 
 	kd_tree(std::vector<kd_point> &Points) { insert(Points); }
-
-	kd_tree& kd_tree::operator=(kd_tree&& other)
-	{
-		if (this != other)
-		{
-			// release the current object’s resources
-			m_Root.reset();
-			m_firstLeaf.reset();
-
-			// pilfer other’s resource
-			m_Root = other.m_Root;
-			m_firstLeaf other.m_firstLeaf;
-
-			// reset other
-			otheer.m_Root.reset();
-			other.m_firstLeaf.reset();
-		}
-
-		return *this;
-	}
 
 	void clear() { m_Root.reset(); }
 
@@ -559,7 +539,7 @@ public:
 		if (Points.size() > 0)
 		{
 			sort(Points.begin(), Points.end());
-			std::vector<kd_point>::iterator it = unique(Points.begin(), Points.end());
+			auto it = unique(Points.begin(), Points.end());
 			Points.resize(distance(Points.begin(), it));
 			Points.shrink_to_fit();
 
@@ -770,7 +750,8 @@ public:
 		kd_point nearPoint = ApproxNearestNeighborPoint(srcPoint);
 		float minDistance = Distance(srcPoint, nearPoint);
 		
-		m_Root->nearestNeighbor(srcPoint, nearPoint, minDistance, kd_box<K>(srcPoint, minDistance));
+		auto minBox = kd_box<K>(srcPoint, minDistance);
+		m_Root->nearestNeighbor(srcPoint, nearPoint, minDistance, minBox);
 
 		return nearPoint;
 	}
@@ -813,7 +794,8 @@ public:
 			for (unsigned i = 0; i < k; i++)
 				minDistances[i] = Distance(srcPoint, nearPoints[i]);
 
-			m_Root->KNearestNeighbors(srcPoint, k, nearPoints, minDistances, kd_box<K>(srcPoint, minDistances[k - 1]));
+			auto minBox = kd_box<K>(srcPoint, minDistances[k - 1]);
+			m_Root->KNearestNeighbors(srcPoint, k, nearPoints, minDistances, minBox);
 		}
 
 		return nearPoints;

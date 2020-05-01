@@ -24,6 +24,7 @@
 //  2016-10-12 Refactoring & improvements
 //  2017-11-04 Cleanups
 //  2017-12-14 Cleanups
+//  2020-05-01 Iterator cleanup
 
 // ---------------------------------------------------------------------------------------------
 
@@ -176,15 +177,15 @@ protected:
 						 const std::shared_ptr<kd_node> &Left, const std::shared_ptr<kd_node> &Right) :
 									m_splitVal(splitVal), m_axis(axis), m_boundingBox(boundingBox), m_Left(Left), m_Right(Right) {}
 
-		void updateBox(const kd_point &Point) { m_boundingBox.updateBox(Point);  }
+		void updateBox(const kd_point &Point) { m_boundingBox.updateBox(Point); }
 
 		unsigned splitAxis() const { return m_axis; }
 
 		float splitVal() const { return m_splitVal; }
 
-		virtual bool isInternal() const override  { return true; }
+		virtual bool isInternal() const override { return true; }
 
-		virtual kd_box<K> boundingBox() const override  { return m_boundingBox; }
+		virtual kd_box<K> boundingBox() const override { return m_boundingBox; }
 
 		virtual void pointsInBox(const kd_box<K> &searchBox, std::vector<kd_point> &Points) const override 
 		{
@@ -244,13 +245,13 @@ protected:
 
 		const kd_point pointCoords() const { return m_pointCoords; }
 
-		virtual bool isInternal() const override  { return false; }
+		virtual bool isInternal() const override { return false; }
 
-		virtual unsigned TreeHeight() const override  { return 1; }
+		virtual unsigned TreeHeight() const override { return 1; }
 
-		virtual unsigned nodeCount(bool) const override  { return 1; }
+		virtual unsigned nodeCount(bool) const override { return 1; }
 
-		virtual kd_box<K> boundingBox() const override  { return { m_pointCoords, m_pointCoords }; }
+		virtual kd_box<K> boundingBox() const override { return { m_pointCoords, m_pointCoords }; }
 
 		virtual void pointsInBox(const kd_box<K>&, std::vector<kd_point> &Points) const override
 		{
@@ -448,6 +449,26 @@ public:
 
 	kd_tree(std::vector<kd_point> &Points) { insert(Points); }
 
+	kd_tree& operator=(kd_tree&& other)
+	{
+		if (this != other)
+		{
+			// release the current object’s resources
+			m_Root.reset();
+			m_firstLeaf.reset();
+
+			// pilfer other’s resource
+			m_Root = other.m_Root;
+			m_firstLeaf = other.m_firstLeaf;
+
+			// reset other
+			other.m_Root.reset();
+			other.m_firstLeaf.reset();
+		}
+
+		return *this;
+	}
+
 	void clear() { m_Root.reset(); }
 
 	kd_tree(const kd_tree &obj) = delete;
@@ -480,9 +501,15 @@ public:
 	//
 	// Iterator implementation
 	//
-	class const_iterator : public std::iterator<std::forward_iterator_tag, kd_point, void, kd_point*, kd_point&>
+	class const_iterator
 	{
 	public:
+
+		using iterator_category = std::forward_iterator_tag;
+		using value_type		= kd_point;
+		using difference_type	= void;
+		using pointer			= kd_point*;
+		using reference			= kd_point&;
 
 		const_iterator() = default;
 		const_iterator(const std::shared_ptr<kd_leaf_node> &node) : nodePtr(node) {}
